@@ -1,0 +1,1671 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (extras.classList.contains("collapsed")) {
+            expandcollapse.classList.add("expander")
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return (key_a < key_b ? 1 : -1);
+        } else {
+            return (key_a > key_b ? 1 : -1);
+        }
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>demo.html</h1>
+    <p>Report generated on 24-Nov-2020 at 22:34:45 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v2.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk1.8.0_212</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.9.0", "pytest": "5.4.3"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.18362-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "2.1.1", "metadata": "1.10.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.6.8</td></tr></table>
+    <h2>Summary</h2>
+    <p>2 tests ran in 3.98 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">2 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/demo_testcase_ref_test.py::TestCaseDemoTestcaseRef::test_start</td>
+          <td class="col-duration">2.01</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stderr call------------------------------ <br/>--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 2, 726109), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;test_start&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 451, &#x27;message&#x27;: &#x27;Start to run testcase: request methods testcase: reference testcase, TestCase ID: e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 41, 852270, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 2, 730105), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 292, &#x27;message&#x27;: &#x27;run step begin: request with functions &gt;&gt;&gt;&gt;&gt;&gt;&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 41, 856266, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 2, 732092), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 292, &#x27;message&#x27;: &#x27;run step begin: get with params &gt;&gt;&gt;&gt;&gt;&gt;&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 41, 858253, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 841643), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 186, &#x27;message&#x27;: &#x27;client IP: 192.168.1.8, Port: 55646&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 967804, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 843637), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 194, &#x27;message&#x27;: &#x27;server IP: 52.7.61.87, Port: 443&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 969798, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 845632), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== request details ==================\nmethod   : GET\nurl      : https://postman-echo.com/get?foo1=bar11&amp;foo2=bar21&amp;sum_v=3\nheaders  : {\n    &quot;User-Agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n    &quot;Accept-Encoding&quot;: &quot;gzip, deflate&quot;,\n    &quot;Accept&quot;: &quot;*/*&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;HRUN-Request-ID&quot;: &quot;HRUN-e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb-481862&quot;\n}\ncookies  : {}\nbody     : None\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 971793, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 847628), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== response details ==================\nstatus_code : 200\nheaders  : {\n    &quot;Date&quot;: &quot;Tue, 24 Nov 2020 14:34:44 GMT&quot;,\n    &quot;Content-Type&quot;: &quot;application/json; charset=utf-8&quot;,\n    &quot;Content-Length&quot;: &quot;421&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;ETag&quot;: &quot;W/\\&quot;1a5-EHiz2gpi4UY7hURkw25yFBkjqeg\\&quot;&quot;,\n    &quot;Vary&quot;: &quot;Accept-Encoding&quot;,\n    &quot;set-cookie&quot;: &quot;sails.sid=s%3ANexFc6hK0JGSygFP5npHSx7D4cCB-7Kl.T3N5GqNyBO%2B%2B3p6TB1WSrejGkJIRiy3SwQX3M23k0J4; Path=/; HttpOnly&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3ANexFc6hK0JGSygFP5npHSx7D4cCB-7Kl.T3N5GqNyBO%2B%2B3p6TB1WSrejGkJIRiy3SwQX3M23k0J4&quot;\n}\nencoding : utf-8\ncontent_type : application/json; charset=utf-8\nbody     : {\n    &quot;args&quot;: {\n        &quot;foo1&quot;: &quot;bar11&quot;,\n        &quot;foo2&quot;: &quot;bar21&quot;,\n        &quot;sum_v&quot;: &quot;3&quot;\n    },\n    &quot;headers&quot;: {\n        &quot;x-forwarded-proto&quot;: &quot;https&quot;,\n        &quot;x-forwarded-port&quot;: &quot;443&quot;,\n        &quot;host&quot;: &quot;postman-echo.com&quot;,\n        &quot;x-amzn-trace-id&quot;: &quot;Root=1-5fbd1a04-3dfed7a43e472add3fcf5a77&quot;,\n        &quot;user-agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n        &quot;accept-encoding&quot;: &quot;gzip, deflate&quot;,\n        &quot;accept&quot;: &quot;*/*&quot;,\n        &quot;hrun-request-id&quot;: &quot;HRUN-e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb-481862&quot;\n    },\n    &quot;url&quot;: &quot;https://postman-echo.com/get?foo1=bar11&amp;foo2=bar21&amp;sum_v=3&quot;\n}\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 973789, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 848657), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 218, &#x27;message&#x27;: &#x27;status_code: 200, response_time(ms): 1105.56 ms, response_length: 0 bytes&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 974818, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 849650), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;extract&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 176, &#x27;message&#x27;: &quot;extract mapping: {&#x27;foo3&#x27;: &#x27;bar21&#x27;}&quot;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 975811, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 850652), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert status_code equal 200(int)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 976813, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 852614), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.args.foo1 equal bar11(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 978775, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 853611), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.args.sum_v equal 3(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 979772, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 854610), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.args.foo2 equal bar21(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 980771, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 855608), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 304, &#x27;message&#x27;: &#x27;run step end: get with params &lt;&lt;&lt;&lt;&lt;&lt;\n&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 981769, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 3, 856605), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 292, &#x27;message&#x27;: &#x27;run step begin: post raw text &gt;&gt;&gt;&gt;&gt;&gt;&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 42, 982766, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 134251), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 186, &#x27;message&#x27;: &#x27;client IP: 192.168.1.8, Port: 55646&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 260412, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 136279), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 194, &#x27;message&#x27;: &#x27;server IP: 52.7.61.87, Port: 443&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 262440, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 137278), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== request details ==================\nmethod   : POST\nurl      : https://postman-echo.com/post\nheaders  : {\n    &quot;User-Agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n    &quot;Accept-Encoding&quot;: &quot;gzip, deflate&quot;,\n    &quot;Accept&quot;: &quot;*/*&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;Content-Type&quot;: &quot;text/plain&quot;,\n    &quot;HRUN-Request-ID&quot;: &quot;HRUN-e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb-482983&quot;,\n    &quot;Cookie&quot;: &quot;sails.sid=s%3ANexFc6hK0JGSygFP5npHSx7D4cCB-7Kl.T3N5GqNyBO%2B%2B3p6TB1WSrejGkJIRiy3SwQX3M23k0J4&quot;,\n    &quot;Content-Length&quot;: &quot;83&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3ANexFc6hK0JGSygFP5npHSx7D4cCB-7Kl.T3N5GqNyBO%2B%2B3p6TB1WSrejGkJIRiy3SwQX3M23k0J4&quot;\n}\nbody     : This is expected to be sent back as part of response body: bar12-config_bar2-bar32.\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 263439, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 139266), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== response details ==================\nstatus_code : 200\nheaders  : {\n    &quot;Date&quot;: &quot;Tue, 24 Nov 2020 14:34:44 GMT&quot;,\n    &quot;Content-Type&quot;: &quot;application/json; charset=utf-8&quot;,\n    &quot;Content-Length&quot;: &quot;633&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;ETag&quot;: &quot;W/\\&quot;279-PRIjkeNxcUj5BmIAcTbEzZnVSGY\\&quot;&quot;,\n    &quot;Vary&quot;: &quot;Accept-Encoding&quot;,\n    &quot;set-cookie&quot;: &quot;sails.sid=s%3AWY30Ho5OFG9FWcelTIc8IVmUb8v2DGui.pdaI73teZNSdYuuoWLfIVsHIh55VxF5TSFuJXf0j7ZU; Path=/; HttpOnly&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3AWY30Ho5OFG9FWcelTIc8IVmUb8v2DGui.pdaI73teZNSdYuuoWLfIVsHIh55VxF5TSFuJXf0j7ZU&quot;\n}\nencoding : utf-8\ncontent_type : application/json; charset=utf-8\nbody     : {\n    &quot;args&quot;: {},\n    &quot;data&quot;: &quot;This is expected to be sent back as part of response body: bar12-config_bar2-bar32.&quot;,\n    &quot;files&quot;: {},\n    &quot;form&quot;: {},\n    &quot;headers&quot;: {\n        &quot;x-forwarded-proto&quot;: &quot;https&quot;,\n        &quot;x-forwarded-port&quot;: &quot;443&quot;,\n        &quot;host&quot;: &quot;postman-echo.com&quot;,\n        &quot;x-amzn-trace-id&quot;: &quot;Root=1-5fbd1a04-28b8f31a211fb3754a11f2f7&quot;,\n        &quot;content-length&quot;: &quot;83&quot;,\n        &quot;user-agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n        &quot;accept-encoding&quot;: &quot;gzip, deflate&quot;,\n        &quot;accept&quot;: &quot;*/*&quot;,\n        &quot;content-type&quot;: &quot;text/plain&quot;,\n        &quot;hrun-request-id&quot;: &quot;HRUN-e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb-482983&quot;,\n        &quot;cookie&quot;: &quot;sails.sid=s%3ANexFc6hK0JGSygFP5npHSx7D4cCB-7Kl.T3N5GqNyBO%2B%2B3p6TB1WSrejGkJIRiy3SwQX3M23k0J4&quot;\n    },\n    &quot;json&quot;: null,\n    &quot;url&quot;: &quot;https://postman-echo.com/post&quot;\n}\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 265427, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 140265), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 218, &#x27;message&#x27;: &#x27;status_code: 200, response_time(ms): 276.65 ms, response_length: 0 bytes&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 266426, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 142229), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert status_code equal 200(int)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 268390, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 143230), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.data equal This is expected to be sent back as part of response body: bar12-config_bar2-bar32.(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 269391, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 145221), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 304, &#x27;message&#x27;: &#x27;run step end: post raw text &lt;&lt;&lt;&lt;&lt;&lt;\n&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 271382, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 146219), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 292, &#x27;message&#x27;: &#x27;run step begin: post form data &gt;&gt;&gt;&gt;&gt;&gt;&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 272380, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 425389), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 186, &#x27;message&#x27;: &#x27;client IP: 192.168.1.8, Port: 55646&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 551550, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 426392), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 194, &#x27;message&#x27;: &#x27;server IP: 52.7.61.87, Port: 443&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 552553, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 427389), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== request details ==================\nmethod   : POST\nurl      : https://postman-echo.com/post\nheaders  : {\n    &quot;User-Agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n    &quot;Accept-Encoding&quot;: &quot;gzip, deflate&quot;,\n    &quot;Accept&quot;: &quot;*/*&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;,\n    &quot;HRUN-Request-ID&quot;: &quot;HRUN-e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb-483273&quot;,\n    &quot;Cookie&quot;: &quot;sails.sid=s%3AWY30Ho5OFG9FWcelTIc8IVmUb8v2DGui.pdaI73teZNSdYuuoWLfIVsHIh55VxF5TSFuJXf0j7ZU&quot;,\n    &quot;Content-Length&quot;: &quot;44&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3AWY30Ho5OFG9FWcelTIc8IVmUb8v2DGui.pdaI73teZNSdYuuoWLfIVsHIh55VxF5TSFuJXf0j7ZU&quot;\n}\nbody     : foo1=testcase_ref_bar1&amp;foo2=bar23&amp;foo3=bar21\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 553550, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 429384), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== response details ==================\nstatus_code : 200\nheaders  : {\n    &quot;Date&quot;: &quot;Tue, 24 Nov 2020 14:34:44 GMT&quot;,\n    &quot;Content-Type&quot;: &quot;application/json; charset=utf-8&quot;,\n    &quot;Content-Length&quot;: &quot;679&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;ETag&quot;: &quot;W/\\&quot;2a7-DzFGS+za6Igg+n0lLXRxMRJeq7Y\\&quot;&quot;,\n    &quot;Vary&quot;: &quot;Accept-Encoding&quot;,\n    &quot;set-cookie&quot;: &quot;sails.sid=s%3A6fIwyQS-NexTBgsORt1Y41bNZlOFd6-A.h9AcvminviyyZ4FfSFIsxZDAhcvaWvjh7GghMiWZEAI; Path=/; HttpOnly&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3A6fIwyQS-NexTBgsORt1Y41bNZlOFd6-A.h9AcvminviyyZ4FfSFIsxZDAhcvaWvjh7GghMiWZEAI&quot;\n}\nencoding : utf-8\ncontent_type : application/json; charset=utf-8\nbody     : {\n    &quot;args&quot;: {},\n    &quot;data&quot;: &quot;&quot;,\n    &quot;files&quot;: {},\n    &quot;form&quot;: {\n        &quot;foo1&quot;: &quot;testcase_ref_bar1&quot;,\n        &quot;foo2&quot;: &quot;bar23&quot;,\n        &quot;foo3&quot;: &quot;bar21&quot;\n    },\n    &quot;headers&quot;: {\n        &quot;x-forwarded-proto&quot;: &quot;https&quot;,\n        &quot;x-forwarded-port&quot;: &quot;443&quot;,\n        &quot;host&quot;: &quot;postman-echo.com&quot;,\n        &quot;x-amzn-trace-id&quot;: &quot;Root=1-5fbd1a04-7bf4915b0f4303b7056c90a5&quot;,\n        &quot;content-length&quot;: &quot;44&quot;,\n        &quot;user-agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n        &quot;accept-encoding&quot;: &quot;gzip, deflate&quot;,\n        &quot;accept&quot;: &quot;*/*&quot;,\n        &quot;content-type&quot;: &quot;application/x-www-form-urlencoded&quot;,\n        &quot;hrun-request-id&quot;: &quot;HRUN-e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb-483273&quot;,\n        &quot;cookie&quot;: &quot;sails.sid=s%3AWY30Ho5OFG9FWcelTIc8IVmUb8v2DGui.pdaI73teZNSdYuuoWLfIVsHIh55VxF5TSFuJXf0j7ZU&quot;\n    },\n    &quot;json&quot;: {\n        &quot;foo1&quot;: &quot;testcase_ref_bar1&quot;,\n        &quot;foo2&quot;: &quot;bar23&quot;,\n        &quot;foo3&quot;: &quot;bar21&quot;\n    },\n    &quot;url&quot;: &quot;https://postman-echo.com/post&quot;\n}\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 555545, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 430383), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 218, &#x27;message&#x27;: &#x27;status_code: 200, response_time(ms): 277.15 ms, response_length: 0 bytes&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 556544, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 433340), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert status_code equal 200(int)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 559501, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 435338), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.form.foo1 equal testcase_ref_bar1(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 561499, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 436335), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.form.foo2 equal bar23(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 562496, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 438329), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.form.foo3 equal bar21(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 564490, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 439328), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 304, &#x27;message&#x27;: &#x27;run step end: post form data &lt;&lt;&lt;&lt;&lt;&lt;\n&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 565489, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 440325), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step_testcase&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 286, &#x27;message&#x27;: &quot;export variables: {&#x27;foo3&#x27;: &#x27;bar21&#x27;}&quot;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 566486, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 441323), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 304, &#x27;message&#x27;: &#x27;run step end: request with functions &lt;&lt;&lt;&lt;&lt;&lt;\n&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 567484, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 443315), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 292, &#x27;message&#x27;: &#x27;run step begin: post form data &gt;&gt;&gt;&gt;&gt;&gt;&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 569476, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 713395), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 186, &#x27;message&#x27;: &#x27;client IP: 192.168.1.8, Port: 55646&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 839556, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 715425), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 194, &#x27;message&#x27;: &#x27;server IP: 52.7.61.87, Port: 443&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 841586, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 717420), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== request details ==================\nmethod   : POST\nurl      : https://postman-echo.com/post\nheaders  : {\n    &quot;User-Agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n    &quot;Accept-Encoding&quot;: &quot;gzip, deflate&quot;,\n    &quot;Accept&quot;: &quot;*/*&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;,\n    &quot;HRUN-Request-ID&quot;: &quot;HRUN-e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb-483571&quot;,\n    &quot;Cookie&quot;: &quot;sails.sid=s%3A6fIwyQS-NexTBgsORt1Y41bNZlOFd6-A.h9AcvminviyyZ4FfSFIsxZDAhcvaWvjh7GghMiWZEAI&quot;,\n    &quot;Content-Length&quot;: &quot;20&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3A6fIwyQS-NexTBgsORt1Y41bNZlOFd6-A.h9AcvminviyyZ4FfSFIsxZDAhcvaWvjh7GghMiWZEAI&quot;\n}\nbody     : foo1=bar1&amp;foo2=bar21\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 843581, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 718417), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== response details ==================\nstatus_code : 200\nheaders  : {\n    &quot;Date&quot;: &quot;Tue, 24 Nov 2020 14:34:45 GMT&quot;,\n    &quot;Content-Type&quot;: &quot;application/json; charset=utf-8&quot;,\n    &quot;Content-Length&quot;: &quot;623&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;ETag&quot;: &quot;W/\\&quot;26f-LshTC6twX00IC6gqOdMbButqb7I\\&quot;&quot;,\n    &quot;Vary&quot;: &quot;Accept-Encoding&quot;,\n    &quot;set-cookie&quot;: &quot;sails.sid=s%3ApwLD_FmZCUa_gISNrYbS9pztnAT0WkZm.7nYVwR8WoYaLmwVHuTzMJxalT%2F8cco8NkOMTsAs4zmg; Path=/; HttpOnly&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3ApwLD_FmZCUa_gISNrYbS9pztnAT0WkZm.7nYVwR8WoYaLmwVHuTzMJxalT%2F8cco8NkOMTsAs4zmg&quot;\n}\nencoding : utf-8\ncontent_type : application/json; charset=utf-8\nbody     : {\n    &quot;args&quot;: {},\n    &quot;data&quot;: &quot;&quot;,\n    &quot;files&quot;: {},\n    &quot;form&quot;: {\n        &quot;foo1&quot;: &quot;bar1&quot;,\n        &quot;foo2&quot;: &quot;bar21&quot;\n    },\n    &quot;headers&quot;: {\n        &quot;x-forwarded-proto&quot;: &quot;https&quot;,\n        &quot;x-forwarded-port&quot;: &quot;443&quot;,\n        &quot;host&quot;: &quot;postman-echo.com&quot;,\n        &quot;x-amzn-trace-id&quot;: &quot;Root=1-5fbd1a05-6e05580f7f47019826a067e3&quot;,\n        &quot;content-length&quot;: &quot;20&quot;,\n        &quot;user-agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n        &quot;accept-encoding&quot;: &quot;gzip, deflate&quot;,\n        &quot;accept&quot;: &quot;*/*&quot;,\n        &quot;content-type&quot;: &quot;application/x-www-form-urlencoded&quot;,\n        &quot;hrun-request-id&quot;: &quot;HRUN-e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb-483571&quot;,\n        &quot;cookie&quot;: &quot;sails.sid=s%3A6fIwyQS-NexTBgsORt1Y41bNZlOFd6-A.h9AcvminviyyZ4FfSFIsxZDAhcvaWvjh7GghMiWZEAI&quot;\n    },\n    &quot;json&quot;: {\n        &quot;foo1&quot;: &quot;bar1&quot;,\n        &quot;foo2&quot;: &quot;bar21&quot;\n    },\n    &quot;url&quot;: &quot;https://postman-echo.com/post&quot;\n}\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 844578, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 720411), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 218, &#x27;message&#x27;: &#x27;status_code: 200, response_time(ms): 268.08 ms, response_length: 0 bytes&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 846572, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 721416), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert status_code equal 200(int)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 847577, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 722407), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.form.foo1 equal bar1(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 848568, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 723382), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.form.foo2 equal bar21(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 849543, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 725404), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 304, &#x27;message&#x27;: &#x27;run step end: post form data &lt;&lt;&lt;&lt;&lt;&lt;\n&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 851565, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 727365), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;test_start&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 460, &#x27;message&#x27;: &#x27;generate testcase log: C:\\Users\\Ling\\hogwarts\\Scripts\\hogwarts-20201124\\logs\\e5ef7715-fa3a-4577-b4a0-d5a5ac6aaecb.run.log&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 853526, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/demo_testcase_request_test.py::TestCaseDemoTestcaseRequest::test_start</td>
+          <td class="col-duration">1.69</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stderr call------------------------------ <br/>--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 748233), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;test_start&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 451, &#x27;message&#x27;: &#x27;Start to run testcase: request methods testcase with functions, TestCase ID: 0410cfce-1ccc-43ca-9116-fb8fc7a3d661&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 874394, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 4, 750229), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 292, &#x27;message&#x27;: &#x27;run step begin: get with params &gt;&gt;&gt;&gt;&gt;&gt;&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 43, 876390, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 839039), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 186, &#x27;message&#x27;: &#x27;client IP: 192.168.1.8, Port: 55647&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 965200, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 842031), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 194, &#x27;message&#x27;: &#x27;server IP: 52.7.61.87, Port: 443&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 968192, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 844987), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== request details ==================\nmethod   : GET\nurl      : https://postman-echo.com/get?foo1=bar11&amp;foo2=bar21&amp;sum_v=3\nheaders  : {\n    &quot;User-Agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n    &quot;Accept-Encoding&quot;: &quot;gzip, deflate&quot;,\n    &quot;Accept&quot;: &quot;*/*&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;HRUN-Request-ID&quot;: &quot;HRUN-0410cfce-1ccc-43ca-9116-fb8fc7a3d661-483878&quot;\n}\ncookies  : {}\nbody     : None\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 971148, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 854390), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== response details ==================\nstatus_code : 200\nheaders  : {\n    &quot;Date&quot;: &quot;Tue, 24 Nov 2020 14:34:46 GMT&quot;,\n    &quot;Content-Type&quot;: &quot;application/json; charset=utf-8&quot;,\n    &quot;Content-Length&quot;: &quot;421&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;ETag&quot;: &quot;W/\\&quot;1a5-mHkRydT5T0nVG2npveH+YyYRGVo\\&quot;&quot;,\n    &quot;Vary&quot;: &quot;Accept-Encoding&quot;,\n    &quot;set-cookie&quot;: &quot;sails.sid=s%3AKc6UwzfDRtW0hUIMAUEIRmjJlwrAYFao.LiOZFB4fWTRWGIpIxl5TgVRKoeUdECwHG4BEVxCIya8; Path=/; HttpOnly&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3AKc6UwzfDRtW0hUIMAUEIRmjJlwrAYFao.LiOZFB4fWTRWGIpIxl5TgVRKoeUdECwHG4BEVxCIya8&quot;\n}\nencoding : utf-8\ncontent_type : application/json; charset=utf-8\nbody     : {\n    &quot;args&quot;: {\n        &quot;foo1&quot;: &quot;bar11&quot;,\n        &quot;foo2&quot;: &quot;bar21&quot;,\n        &quot;sum_v&quot;: &quot;3&quot;\n    },\n    &quot;headers&quot;: {\n        &quot;x-forwarded-proto&quot;: &quot;https&quot;,\n        &quot;x-forwarded-port&quot;: &quot;443&quot;,\n        &quot;host&quot;: &quot;postman-echo.com&quot;,\n        &quot;x-amzn-trace-id&quot;: &quot;Root=1-5fbd1a06-50ca5c3e32f2684009baa581&quot;,\n        &quot;user-agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n        &quot;accept-encoding&quot;: &quot;gzip, deflate&quot;,\n        &quot;accept&quot;: &quot;*/*&quot;,\n        &quot;hrun-request-id&quot;: &quot;HRUN-0410cfce-1ccc-43ca-9116-fb8fc7a3d661-483878&quot;\n    },\n    &quot;url&quot;: &quot;https://postman-echo.com/get?foo1=bar11&amp;foo2=bar21&amp;sum_v=3&quot;\n}\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 980551, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 856387), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 218, &#x27;message&#x27;: &#x27;status_code: 200, response_time(ms): 1086.81 ms, response_length: 0 bytes&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 982548, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 857385), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;extract&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 176, &#x27;message&#x27;: &quot;extract mapping: {&#x27;foo3&#x27;: &#x27;bar21&#x27;}&quot;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 983546, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 859380), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert status_code equal 200(int)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 985541, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 860377), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.args.foo1 equal bar11(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 986538, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 861374), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.args.sum_v equal 3(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 987535, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 862372), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.args.foo2 equal bar21(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 988533, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 864367), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 304, &#x27;message&#x27;: &#x27;run step end: get with params &lt;&lt;&lt;&lt;&lt;&lt;\n&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 990528, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 5, 865397), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 292, &#x27;message&#x27;: &#x27;run step begin: post raw text &gt;&gt;&gt;&gt;&gt;&gt;&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 44, 991558, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 136287), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 186, &#x27;message&#x27;: &#x27;client IP: 192.168.1.8, Port: 55647&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 262448, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 137283), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 194, &#x27;message&#x27;: &#x27;server IP: 52.7.61.87, Port: 443&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 263444, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 138280), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== request details ==================\nmethod   : POST\nurl      : https://postman-echo.com/post\nheaders  : {\n    &quot;User-Agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n    &quot;Accept-Encoding&quot;: &quot;gzip, deflate&quot;,\n    &quot;Accept&quot;: &quot;*/*&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;Content-Type&quot;: &quot;text/plain&quot;,\n    &quot;HRUN-Request-ID&quot;: &quot;HRUN-0410cfce-1ccc-43ca-9116-fb8fc7a3d661-484993&quot;,\n    &quot;Cookie&quot;: &quot;sails.sid=s%3AKc6UwzfDRtW0hUIMAUEIRmjJlwrAYFao.LiOZFB4fWTRWGIpIxl5TgVRKoeUdECwHG4BEVxCIya8&quot;,\n    &quot;Content-Length&quot;: &quot;83&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3AKc6UwzfDRtW0hUIMAUEIRmjJlwrAYFao.LiOZFB4fWTRWGIpIxl5TgVRKoeUdECwHG4BEVxCIya8&quot;\n}\nbody     : This is expected to be sent back as part of response body: bar12-config_bar2-bar32.\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 264441, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 140275), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== response details ==================\nstatus_code : 200\nheaders  : {\n    &quot;Date&quot;: &quot;Tue, 24 Nov 2020 14:34:46 GMT&quot;,\n    &quot;Content-Type&quot;: &quot;application/json; charset=utf-8&quot;,\n    &quot;Content-Length&quot;: &quot;629&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;ETag&quot;: &quot;W/\\&quot;275-YelhTEXMIuTq8vkMzf3RlI6Jmus\\&quot;&quot;,\n    &quot;Vary&quot;: &quot;Accept-Encoding&quot;,\n    &quot;set-cookie&quot;: &quot;sails.sid=s%3ASQTtqCxOZyhM_eLWISF1R6Z4xP5eo3Fs.m8PuQYsDAHEm7w%2BPg8MLOhOHq5s7QkDk2yoOdMhRH50; Path=/; HttpOnly&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3ASQTtqCxOZyhM_eLWISF1R6Z4xP5eo3Fs.m8PuQYsDAHEm7w%2BPg8MLOhOHq5s7QkDk2yoOdMhRH50&quot;\n}\nencoding : utf-8\ncontent_type : application/json; charset=utf-8\nbody     : {\n    &quot;args&quot;: {},\n    &quot;data&quot;: &quot;This is expected to be sent back as part of response body: bar12-config_bar2-bar32.&quot;,\n    &quot;files&quot;: {},\n    &quot;form&quot;: {},\n    &quot;headers&quot;: {\n        &quot;x-forwarded-proto&quot;: &quot;https&quot;,\n        &quot;x-forwarded-port&quot;: &quot;443&quot;,\n        &quot;host&quot;: &quot;postman-echo.com&quot;,\n        &quot;x-amzn-trace-id&quot;: &quot;Root=1-5fbd1a06-637383c84adf29442fed7635&quot;,\n        &quot;content-length&quot;: &quot;83&quot;,\n        &quot;user-agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n        &quot;accept-encoding&quot;: &quot;gzip, deflate&quot;,\n        &quot;accept&quot;: &quot;*/*&quot;,\n        &quot;content-type&quot;: &quot;text/plain&quot;,\n        &quot;hrun-request-id&quot;: &quot;HRUN-0410cfce-1ccc-43ca-9116-fb8fc7a3d661-484993&quot;,\n        &quot;cookie&quot;: &quot;sails.sid=s%3AKc6UwzfDRtW0hUIMAUEIRmjJlwrAYFao.LiOZFB4fWTRWGIpIxl5TgVRKoeUdECwHG4BEVxCIya8&quot;\n    },\n    &quot;json&quot;: null,\n    &quot;url&quot;: &quot;https://postman-echo.com/post&quot;\n}\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 266436, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 142270), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 218, &#x27;message&#x27;: &#x27;status_code: 200, response_time(ms): 268.89 ms, response_length: 0 bytes&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 268431, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 144264), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert status_code equal 200(int)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 270425, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 145296), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.data equal This is expected to be sent back as part of response body: bar12-config_bar2-bar32.(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 271457, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 146293), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 304, &#x27;message&#x27;: &#x27;run step end: post raw text &lt;&lt;&lt;&lt;&lt;&lt;\n&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 272454, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 147285), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 292, &#x27;message&#x27;: &#x27;run step begin: post form data &gt;&gt;&gt;&gt;&gt;&gt;&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 273446, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 419640), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 186, &#x27;message&#x27;: &#x27;client IP: 192.168.1.8, Port: 55647&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 545801, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 421643), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 194, &#x27;message&#x27;: &#x27;server IP: 52.7.61.87, Port: 443&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 547804, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 422640), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== request details ==================\nmethod   : POST\nurl      : https://postman-echo.com/post\nheaders  : {\n    &quot;User-Agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n    &quot;Accept-Encoding&quot;: &quot;gzip, deflate&quot;,\n    &quot;Accept&quot;: &quot;*/*&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;,\n    &quot;HRUN-Request-ID&quot;: &quot;HRUN-0410cfce-1ccc-43ca-9116-fb8fc7a3d661-485275&quot;,\n    &quot;Cookie&quot;: &quot;sails.sid=s%3ASQTtqCxOZyhM_eLWISF1R6Z4xP5eo3Fs.m8PuQYsDAHEm7w%2BPg8MLOhOHq5s7QkDk2yoOdMhRH50&quot;,\n    &quot;Content-Length&quot;: &quot;38&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3ASQTtqCxOZyhM_eLWISF1R6Z4xP5eo3Fs.m8PuQYsDAHEm7w%2BPg8MLOhOHq5s7QkDk2yoOdMhRH50&quot;\n}\nbody     : foo1=config_bar1&amp;foo2=bar23&amp;foo3=bar21\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 548801, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 424633), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;log_print&#x27;, &#x27;level&#x27;: (name=&#x27;DEBUG&#x27;, no=10, icon=&#x27;🐞&#x27;), &#x27;line&#x27;: 40, &#x27;message&#x27;: &#x27;\n================== response details ==================\nstatus_code : 200\nheaders  : {\n    &quot;Date&quot;: &quot;Tue, 24 Nov 2020 14:34:46 GMT&quot;,\n    &quot;Content-Type&quot;: &quot;application/json; charset=utf-8&quot;,\n    &quot;Content-Length&quot;: &quot;669&quot;,\n    &quot;Connection&quot;: &quot;keep-alive&quot;,\n    &quot;ETag&quot;: &quot;W/\\&quot;29d-kMwbEC/cM7LsYicAdCwFodHfw40\\&quot;&quot;,\n    &quot;Vary&quot;: &quot;Accept-Encoding&quot;,\n    &quot;set-cookie&quot;: &quot;sails.sid=s%3ATx8amM-abcnHVdv2t8ZqqNk5fYn1GOPf.OZnufdNXcv73lUhggoLDW6YDupNAvr%2FHTgH%2F4fDCLdU; Path=/; HttpOnly&quot;\n}\ncookies  : {\n    &quot;sails.sid&quot;: &quot;s%3ATx8amM-abcnHVdv2t8ZqqNk5fYn1GOPf.OZnufdNXcv73lUhggoLDW6YDupNAvr%2FHTgH%2F4fDCLdU&quot;\n}\nencoding : utf-8\ncontent_type : application/json; charset=utf-8\nbody     : {\n    &quot;args&quot;: {},\n    &quot;data&quot;: &quot;&quot;,\n    &quot;files&quot;: {},\n    &quot;form&quot;: {\n        &quot;foo1&quot;: &quot;config_bar1&quot;,\n        &quot;foo2&quot;: &quot;bar23&quot;,\n        &quot;foo3&quot;: &quot;bar21&quot;\n    },\n    &quot;headers&quot;: {\n        &quot;x-forwarded-proto&quot;: &quot;https&quot;,\n        &quot;x-forwarded-port&quot;: &quot;443&quot;,\n        &quot;host&quot;: &quot;postman-echo.com&quot;,\n        &quot;x-amzn-trace-id&quot;: &quot;Root=1-5fbd1a06-200a4d29657baa32496baabb&quot;,\n        &quot;content-length&quot;: &quot;38&quot;,\n        &quot;user-agent&quot;: &quot;HttpRunner/3.1.4&quot;,\n        &quot;accept-encoding&quot;: &quot;gzip, deflate&quot;,\n        &quot;accept&quot;: &quot;*/*&quot;,\n        &quot;content-type&quot;: &quot;application/x-www-form-urlencoded&quot;,\n        &quot;hrun-request-id&quot;: &quot;HRUN-0410cfce-1ccc-43ca-9116-fb8fc7a3d661-485275&quot;,\n        &quot;cookie&quot;: &quot;sails.sid=s%3ASQTtqCxOZyhM_eLWISF1R6Z4xP5eo3Fs.m8PuQYsDAHEm7w%2BPg8MLOhOHq5s7QkDk2yoOdMhRH50&quot;\n    },\n    &quot;json&quot;: {\n        &quot;foo1&quot;: &quot;config_bar1&quot;,\n        &quot;foo2&quot;: &quot;bar23&quot;,\n        &quot;foo3&quot;: &quot;bar21&quot;\n    },\n    &quot;url&quot;: &quot;https://postman-echo.com/post&quot;\n}\n&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 550794, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 426657), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;client.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\client.py&#x27;), &#x27;function&#x27;: &#x27;request&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 218, &#x27;message&#x27;: &#x27;status_code: 200, response_time(ms): 270.36 ms, response_length: 0 bytes&#x27;, &#x27;module&#x27;: &#x27;client&#x27;, &#x27;name&#x27;: &#x27;httprunner.client&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 552818, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 427662), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert status_code equal 200(int)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 553823, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 429619), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.form.foo1 equal config_bar1(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 555780, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 430617), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.form.foo2 equal bar23(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 556778, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 432612), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;response.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\response.py&#x27;), &#x27;function&#x27;: &#x27;validate&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 246, &#x27;message&#x27;: &#x27;assert body.form.foo3 equal bar21(str)\t==&gt; pass&#x27;, &#x27;module&#x27;: &#x27;response&#x27;, &#x27;name&#x27;: &#x27;httprunner.response&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 558773, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 433614), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;__run_step&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 304, &#x27;message&#x27;: &#x27;run step end: post form data &lt;&lt;&lt;&lt;&lt;&lt;\n&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 559775, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+--- Logging error in Loguru Handler #0 ---
+Record was: {&#x27;elapsed&#x27;: datetime.timedelta(0, 6, 435606), &#x27;exception&#x27;: None, &#x27;extra&#x27;: {}, &#x27;file&#x27;: (name=&#x27;runner.py&#x27;, path=&#x27;c:\\users\\ling\\hogwarts\\lib\\site-packages\\httprunner\\runner.py&#x27;), &#x27;function&#x27;: &#x27;test_start&#x27;, &#x27;level&#x27;: (name=&#x27;INFO&#x27;, no=20, icon=&#x27;ℹ️&#x27;), &#x27;line&#x27;: 460, &#x27;message&#x27;: &#x27;generate testcase log: C:\\Users\\Ling\\hogwarts\\Scripts\\hogwarts-20201124\\logs\\0410cfce-1ccc-43ca-9116-fb8fc7a3d661.run.log&#x27;, &#x27;module&#x27;: &#x27;runner&#x27;, &#x27;name&#x27;: &#x27;httprunner.runner&#x27;, &#x27;process&#x27;: (id=15144, name=&#x27;MainProcess&#x27;), &#x27;thread&#x27;: (id=16132, name=&#x27;MainThread&#x27;), &#x27;time&#x27;: datetime(2020, 11, 24, 22, 34, 45, 561767, tzinfo=datetime.timezone(datetime.timedelta(0, 28800), &#x27;?D1¨²¡À¨º¡Á?¨º¡À??&#x27;))}
+Traceback (most recent call last):
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_handler.py&quot;, line 177, in emit
+    self._sink.write(str_record)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\loguru\_simple_sinks.py&quot;, line 26, in write
+    self._stream.write(message)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 41, in write
+    self.__convertor.write(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 162, in write
+    self.write_and_convert(text)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 187, in write_and_convert
+    self.write_plain_text(text, cursor, start)
+  File &quot;c:\users\ling\hogwarts\lib\site-packages\colorama\ansitowin32.py&quot;, line 196, in write_plain_text
+    self.wrapped.flush()
+OSError: [WinError 6] 句柄无效。
+--- End of logging error ---
+<br/></div></td></tr></tbody></table></body></html>
